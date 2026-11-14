@@ -1,0 +1,11 @@
+﻿file_name,supplier_name,invoice_number,invoice_date,due_date,subtotal,tax,total,currency,needs_review,review_reasons,extraction_method
+01_northwind_office_supplies.pdf,Northwind Office Supplies Inc.,NW-2026-04817,2026-03-03,2026-04-02,1407.00,116.08,1523.08,USD,NO,,text
+02_brightline_logistics.pdf,Brightline Logistics Ltd,BL/26/10233,2026-10-05,2026-11-04,2380.00,476.00,2856.00,GBP,NO,,text
+03_mueller_industrietechnik.pdf,Müller Industrietechnik GmbH,RE-2026-1187,2026-10-02,2026-11-01,3890.00,739.10,4629.10,EUR,NO,,text
+04_pacific_coast_packaging.pdf,PACIFIC COAST PACKAGING CO.,PCP-55190,2026-08-20,2026-09-04,919.99,66.70,986.69,USD,NO,,text
+05_maple_leaf_it_services.pdf,Maple Leaf IT Services Ltd.,MLIT-0726-031,2026-07-15,2026-08-14,3200.00,384.00,3584.00,CAD,NO,,text
+06_studio_lumiere.pdf,Studio Lumière SARL,F2026-0612,2026-06-05,2026-07-05,1500.00,300.00,1800.00,EUR,NO,,text
+07_greenfield_cleaning.pdf,Greenfield Cleaning Services,GCS-1009,2026-10-01,,640.00,0.00,640.00,USD,YES,missing: due_date,text
+08_apex_electrical_wholesale.pdf,Apex Electrical Wholesale LLC,AEW-778201,2026-09-30,2026-10-30,26758.04,1672.38,28430.42,USD,NO,,text
+09_harbor_freight_forwarding_SCANNED.pdf,Harbour Freight Forwarding Pty Ltd,HFF-90412,2026-08-12,2026-09-11,1980.00,198.00,2178.00,AUD,NO,,image
+10_nordic_timber_SCANNED.pdf,NORDIC TIMBER AB,NT-26-3391,2026-10-10,2026-11-09,12400.00,3100.00,15500.00,SEK,NO,,image
