@@ -1,0 +1,20 @@
+body { padding: 24px 0 60px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.tile b { display: block; font-size: 1.8rem; letter-spacing: -.02em; }
+.tile span { color: var(--muted); font-size: .88rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+.card h2 { font-size: 1.15rem; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.bar-row { display: grid; grid-template-columns: 200px 1fr 120px; gap: 12px; align-items: center; padding: 6px 0; font-size: .92rem; }
+.bar { height: 12px; border-radius: 6px; background: var(--brand); min-width: 2px; }
+.bar-track { background: var(--bg); border-radius: 6px; }
+.bar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.days { display: flex; align-items: flex-end; gap: 4px; height: 110px; padding-top: 10px; }
+.day { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: .7rem; color: var(--muted); }
+.day i { display: block; width: 100%; background: var(--brand); border-radius: 4px 4px 0 0; min-height: 1px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+td.wrap-text { white-space: normal; min-width: 220px; }
+#login { max-width: 380px; margin: 80px auto; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 1fr 1fr 70px; } }
+.dash-title { font-size: 1.8rem; }
+#login .btn { margin-top: 12px; }

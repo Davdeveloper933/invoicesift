@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InvoiceSift — PDF invoices to a clean spreadsheet</title>
+  <meta name="description" content="Drop in PDF invoices, including scans, and get supplier, invoice number, dates, amounts and currency in one clean CSV. Uncertain fields are flagged for review.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="apple-touch-icon" href="/static/logo.png">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="logo" href="#top"><img class="logo-mark" src="/static/logo.svg" alt="" width="28" height="28"> InvoiceSift</a>
+      <nav class="nav-links">
+        <a href="#demo">Try it</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <button class="btn btn-small" data-open-modal="">Get early access</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">For bookkeepers, accountants and small businesses</p>
+        <h1>Stop typing invoices into spreadsheets.</h1>
+        <p class="lead">Drop in a pile of supplier invoices — PDFs or scans — and get supplier, invoice number,
+          dates, subtotal, tax, total and currency in one clean CSV. Anything uncertain is flagged,
+          so you only check what needs checking.</p>
+        <div class="hero-cta">
+          <a class="btn" href="#demo">Try it free — no signup</a>
+          <button class="btn btn-ghost" id="hero-sample">See an example</button>
+        </div>
+        <ul class="hero-points">
+          <li>Works with scanned invoices</li>
+          <li>Any currency and date format</li>
+          <li>Files deleted right after processing</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="problem" id="problem">
+      <div class="wrap">
+        <h2>Sound familiar?</h2>
+        <p class="section-lead">Every month, 100–200 supplier invoices arrive as PDFs. Someone opens each one and types
+          the key details into a spreadsheet by hand. At 2–3 minutes per invoice, that's
+          <strong>5–10 hours of data entry every month</strong> — and one mistyped amount is enough to throw the books off.</p>
+        <div class="compare">
+          <div class="compare-col compare-before">
+            <h3>Today, by hand</h3>
+            <ul>
+              <li>Open every PDF, one by one</li>
+              <li>Retype supplier, invoice number, dates and amounts</li>
+              <li>Different layouts, date formats and currencies from every supplier</li>
+              <li>Scanned invoices you can't even copy text from</li>
+              <li>Typos in totals and dates slip through unnoticed</li>
+            </ul>
+          </div>
+          <div class="compare-col compare-after">
+            <h3>With InvoiceSift</h3>
+            <ul>
+              <li>Upload the PDFs, scans included</li>
+              <li>One row per invoice: supplier, invoice number, invoice date, due date, subtotal, tax, total, currency</li>
+              <li>Dates as YYYY-MM-DD, amounts as plain numbers — ready for Excel or Google Sheets</li>
+              <li>If a field can't be found, it's left blank instead of guessed</li>
+              <li>Rows with missing fields or totals that don't add up are flagged — you check only those</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="demo" id="demo">
+      <div class="wrap">
+        <h2>Try it on your own invoices</h2>
+        <p class="section-lead" id="free-note">Upload up to 8 invoices for free. No signup, no card.</p>
+
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose PDF invoices">
+          <input type="file" id="file-input" accept="application/pdf,.pdf" multiple hidden>
+          <svg class="dz-icon" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" focusable="false">
+            <g class="dz-cloud">
+              <circle cx="19" cy="36" r="10"/>
+              <circle cx="31" cy="27" r="14"/>
+              <circle cx="46" cy="35" r="11"/>
+              <rect x="19" y="30" width="27" height="16"/>
+            </g>
+            <path class="dz-arrow" d="M32 29 L41 40 H36.5 V53 H27.5 V40 H23 Z"/>
+          </svg>
+          <p class="dz-title">Drop PDF invoices here or <span class="link">browse</span></p>
+          <p class="dz-hint" id="dz-hint">PDF only, up to 10 MB each</p>
+        </div>
+        <div class="demo-actions">
+          <span>No invoice at hand?</span>
+          <button class="btn btn-ghost btn-small" id="sample-btn">Use 10 sample invoices</button>
+        </div>
+
+        <div class="status" id="status" hidden></div>
+
+        <div class="results" id="results" hidden>
+          <div class="results-head">
+            <div>
+              <h3 id="results-title">Results</h3>
+              <p class="muted" id="results-sub"></p>
+            </div>
+            <button class="btn btn-small" id="download-btn">Download CSV</button>
+          </div>
+          <div class="table-scroll">
+            <table id="results-table">
+              <thead>
+                <tr>
+                  <th>File</th><th>Supplier</th><th>Invoice #</th><th>Invoice date</th><th>Due date</th>
+                  <th class="num">Subtotal</th><th class="num">Tax</th><th class="num">Total</th><th>Currency</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="results-foot">
+            <p class="muted">Was this useful? <button class="link-btn" data-open-modal="" data-mode="feedback">Tell us what's wrong or missing</button></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how">
+      <div class="wrap">
+        <h2>How it works</h2>
+        <div class="steps">
+          <div class="step"><span class="step-n">1</span><h3>Upload</h3><p>Drop in PDF invoices — digital or scanned, in most common layouts and languages.</p></div>
+          <div class="step"><span class="step-n">2</span><h3>AI reads them</h3><p>Fields are extracted, dates normalised to YYYY-MM-DD and amounts to plain numbers. Sums are cross-checked.</p></div>
+          <div class="step"><span class="step-n">3</span><h3>Check only what's flagged</h3><p>One row per invoice. Missing fields, mismatched totals and duplicates are flagged for review.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pricing" id="pricing">
+      <div class="wrap">
+        <h2>Simple pricing</h2>
+        <p class="section-lead">We're getting ready to launch. Reserve your spot now — <strong>no card needed</strong>.
+          We'll email you when paid access opens.</p>
+        <div class="plans plans-single">
+          <div class="plan plan-featured">
+            <h3>InvoiceSift</h3>
+            <p class="price"><span>$19</span>/month</p>
+            <ul>
+              <li>Up to 500 invoices / month</li>
+              <li>Digital and scanned PDFs</li>
+              <li>CSV that opens in Excel or Google Sheets</li>
+              <li>Review flags: missing fields, totals that don't add up, duplicates</li>
+            </ul>
+            <button class="btn" data-open-modal="Yes $19">Reserve my spot</button>
+            <p class="fine">Pricing may change before launch. You'll see the final price before paying anything.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq" id="faq">
+      <div class="wrap narrow">
+        <h2>Questions</h2>
+        <details><summary>How accurate is it?</summary><p>Try it on your own invoices and see. Rather than guess, it leaves a field blank and flags the row when something can't be found or the numbers don't add up — so you know which rows to double-check.</p></details>
+        <details><summary>Does it work with scanned or photographed invoices?</summary><p>Yes. Pages without a text layer are read as images. Very blurry or handwritten invoices may be flagged for review.</p></details>
+        <details><summary>What happens to my files?</summary><p>Your PDFs are processed and deleted immediately — we don't keep them. The content is sent to our AI provider (OpenAI) for extraction, which does not use API data for training.</p></details>
+        <details><summary>Which fields do you extract?</summary><p>Supplier name, invoice number, invoice date, due date, subtotal, tax, total and currency. Need line items or other fields? Tell us — it helps us decide what to build next.</p></details>
+        <details><summary>Can I connect it to my accounting software?</summary><p>Today you get a CSV that opens in Excel or Google Sheets. If you'd want it sent straight to QuickBooks, Xero or another tool, tell us which one when you reserve your spot.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>© InvoiceSift</span>
+      <button class="link-btn" data-open-modal="" data-mode="feedback">Send feedback</button>
+    </div>
+  </footer>
+
+  <!-- Pre-order + feedback window -->
+  <div class="modal-backdrop" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" id="modal-close" aria-label="Close">×</button>
+      <div id="modal-form-view">
+        <h2 id="modal-title">Get early access</h2>
+        <p class="muted" id="modal-lead">No card needed. We'll email you when paid access opens.</p>
+
+        <form id="modal-form" novalidate>
+          <fieldset class="block" id="fb-block">
+            <legend>How did the extraction do?</legend>
+            <div class="chips" id="rating-chips">
+              <label class="chip"><input type="radio" name="rating" value="great"> All correct</label>
+              <label class="chip"><input type="radio" name="rating" value="mostly"> Mostly right</label>
+              <label class="chip"><input type="radio" name="rating" value="poor"> Many mistakes</label>
+              <label class="chip"><input type="radio" name="rating" value="not_tried"> Didn't try</label>
+            </div>
+            <label class="field">
+              <span>What's wrong, missing, or would make this a must-have for you?</span>
+              <textarea name="comment" rows="3" placeholder="e.g. I also need line items, or: it got the due date wrong on…"></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset class="block" id="plan-block">
+            <legend>Would you pay $19/month for this (up to 500 invoices)?</legend>
+            <div class="plan-pick plan-pick-single">
+              <label class="pick"><input type="radio" name="plan" value="Yes $19"><span><b>Yes</b> — reserve my spot at $19/mo</span></label>
+              <label class="pick"><input type="radio" name="plan" value="Too expensive"><span>Yes, but only if it were cheaper</span></label>
+              <label class="pick"><input type="radio" name="plan" value="Would not pay"><span>No, I wouldn't pay for this</span></label>
+            </div>
+          </fieldset>
+
+          <div class="row2">
+            <label class="field">
+              <span>Invoices per month</span>
+              <select name="monthly_volume">
+                <option value="">Choose…</option>
+                <option>Under 20</option><option>20–100</option><option>100–500</option>
+                <option>500–2,000</option><option>2,000+</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Email <small class="muted">(we'll tell you when it launches)</small></span>
+              <input type="email" name="email" placeholder="you@company.com" autocomplete="email">
+            </label>
+          </div>
+
+          <fieldset class="block compact">
+            <legend>Where should the data go? <small class="muted">(optional)</small></legend>
+            <div class="chips">
+              <label class="chip"><input type="checkbox" name="integrations" value="Excel/CSV"> Excel / CSV</label>
+              <label class="chip"><input type="checkbox" name="integrations" value="Google Sheets"> Google Sheets</label>
+              <label class="chip"><input type="checkbox" name="integrations" value="QuickBooks"> QuickBooks</label>
+              <label class="chip"><input type="checkbox" name="integrations" value="Xero"> Xero</label>
+              <label class="chip"><input type="checkbox" name="integrations" value="Other"> Other</label>
+            </div>
+          </fieldset>
+
+          <label class="hp" aria-hidden="true">Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+          <p class="form-error" id="form-error" hidden></p>
+          <button class="btn btn-wide" type="submit" id="modal-submit">Reserve my spot</button>
+          <p class="fine">No payment now. We'll only email you about the launch. Unsubscribe any time.</p>
+        </form>
+      </div>
+      <div id="modal-thanks" hidden>
+        <h2>Thank you! 🙌</h2>
+        <p id="thanks-text">Your feedback goes straight to the founder and shapes what we build next.</p>
+        <button class="btn" id="thanks-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

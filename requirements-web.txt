@@ -1,0 +1,8 @@
+# The validation website (web/). Includes the extractor's own requirements.
+-r requirements.txt
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+sqlalchemy>=2.0
+# Postgres driver, used when DATABASE_URL is set (e.g. a free Neon database).
+psycopg[binary]>=3.2

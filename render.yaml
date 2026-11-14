@@ -1,0 +1,22 @@
+# Render.com blueprint for the validation website (free plan).
+services:
+  - type: web
+    name: invoicesift
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: uvicorn web.app:app --host 0.0.0.0 --port $PORT --no-server-header
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: OPENAI_API_KEY
+        sync: false          # paste your key in the Render dashboard
+      - key: DATABASE_URL
+        sync: false          # Neon Postgres URL - keeps data when Render restarts
+      - key: ADMIN_TOKEN
+        generateValue: true  # password for /admin, shown in the Render dashboard
+      - key: DEMO_FREE_INVOICES
+        value: "8"
+      - key: DEMO_GLOBAL_DAILY
+        value: "300"

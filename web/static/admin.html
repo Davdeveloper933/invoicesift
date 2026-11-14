@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Validation stats</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="apple-touch-icon" href="/static/logo.png">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/admin.css">
+  </head>
+<body>
+  <div class="wrap">
+    <form id="login" class="card" hidden>
+      <h2>Admin</h2>
+      <label class="field"><span>Admin token (ADMIN_TOKEN)</span><input type="password" id="token" autocomplete="current-password"></label>
+      <p class="form-error" id="login-error" hidden></p>
+      <button class="btn btn-wide">Open stats</button>
+    </form>
+
+    <div id="dash" hidden>
+      <h1 class="dash-title">Is the idea worth building?</h1>
+      <p class="muted" id="updated"></p>
+      <div class="grid" id="tiles"></div>
+
+      <div class="card"><h2>Funnel <small class="muted">unique visitors</small></h2><div id="funnel"></div></div>
+      <div class="card"><h2>Visitors per day <small class="muted">last 14 days</small></h2><div class="days" id="days"></div></div>
+
+      <div class="two">
+        <div class="card"><h2>Plans</h2><div class="table-scroll"><table id="plans"></table></div></div>
+        <div class="card"><h2>Traffic sources</h2><div class="table-scroll"><table id="sources"></table></div></div>
+      </div>
+
+      <div class="card"><h2>Waitlist / pre-orders <button class="btn btn-small btn-ghost" data-export="signups">Export CSV</button></h2><div class="table-scroll"><table id="signups"></table></div></div>
+      <div class="card"><h2>Feedback <button class="btn btn-small btn-ghost" data-export="feedback">Export CSV</button></h2><div class="table-scroll"><table id="feedback"></table></div></div>
+    </div>
+  </div>
+
+<script src="/static/admin.js"></script>
+</body>
+</html>
