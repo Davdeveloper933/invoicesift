@@ -22,11 +22,19 @@
 
     <div id="dash" hidden>
       <h1 class="dash-title">Is the idea worth building?</h1>
-      <p class="muted" id="updated"></p>
+      <div class="period" role="group" aria-label="Period">
+        <button type="button" class="chip" data-period="today">Today</button>
+        <button type="button" class="chip" data-period="yesterday">Yesterday</button>
+        <button type="button" class="chip" data-period="7d">7 days</button>
+        <button type="button" class="chip" data-period="30d">30 days</button>
+        <button type="button" class="chip" data-period="all">All time</button>
+        <input type="date" class="chip" id="period-day" aria-label="Pick a day">
+      </div>
+      <p class="muted"><b class="period-label"></b> · <span id="updated"></span></p>
       <div class="grid" id="tiles"></div>
 
-      <div class="card"><h2>Funnel <small class="muted">unique visitors</small></h2><div id="funnel"></div></div>
-      <div class="card"><h2>Visitors per day <small class="muted">last 14 days</small></h2><div class="days" id="days"></div></div>
+      <div class="card"><h2>Funnel <small class="muted">unique visitors · <span class="period-label"></span></small></h2><div id="funnel"></div></div>
+      <div class="card"><h2>Visitors per day <small class="muted">last 14 days · click a day to open it</small></h2><div class="days" id="days"></div></div>
 
       <div class="two">
         <div class="card"><h2>Plans</h2><div class="table-scroll"><table id="plans"></table></div></div>

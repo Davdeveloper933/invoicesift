@@ -279,3 +279,44 @@ def test_owner_cannot_be_claimed_without_token(client):
     assert client.get("/api/config", params={"visitor_id": "attacker"}).json()["owner"] is False
     upload(client, web_app.FREE_INVOICES, visitor="attacker")
     assert upload(client, 1, visitor="attacker").status_code == 429
+
+
+def test_admin_stats_for_one_day(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    from web import db
+
+    utc = timezone.utc
+    moments = iter([
+        datetime(2026, 11, 15, 12, 0, tzinfo=utc),   # 15 Nov
+        datetime(2026, 11, 16, 20, 30, tzinfo=utc),  # 16 Nov in UTC, but 17 Nov 00:30 in UTC+4
+        datetime(2026, 11, 17, 9, 0, tzinfo=utc),    # 17 Nov
+    ])
+    monkeypatch.setattr(db, "now", lambda: next(moments))
+    for visitor in ("a", "b", "c"):
+        web_app.store.add_event(visitor, "visit")
+    monkeypatch.setattr(db, "now", lambda: datetime(2026, 11, 17, 10, 0, tzinfo=utc))
+
+    token = {"X-Admin-Token": "test-admin-token-123456"}
+    visitors = lambda r: r.json()["funnel"][0]["visitors"]  # noqa: E731
+
+    all_time = client.get("/api/admin/stats", headers=token)
+    assert visitors(all_time) == 3
+    day = {"start": "2026-11-17T00:00:00+04:00", "end": "2026-11-18T00:00:00+04:00", "tz": 240}
+    assert visitors(client.get("/api/admin/stats", headers=token, params=day)) == 2
+    day_utc = {"start": "2026-11-17T00:00:00+00:00", "end": "2026-11-18T00:00:00+00:00"}
+    assert visitors(client.get("/api/admin/stats", headers=token, params=day_utc)) == 1
+
+    chart = {d["day"]: d["visitors"] for d in client.get(
+        "/api/admin/stats", headers=token, params={"tz": 240}).json()["daily_visitors"]}
+    assert chart["2026-11-17"] == 2 and chart["2026-11-16"] == 0 and chart["2026-11-15"] == 1
+    assert len(chart) == 14 and max(chart) == "2026-11-17"
+
+
+
+def test_admin_stats_rejects_bad_period(client):
+    token = {"X-Admin-Token": "test-admin-token-123456"}
+    bad = [{"start": "yesterday"}, {"start": "2026-11-17T00:00:00"}, {"tz": 5000},
+           {"start": "2026-11-18T00:00:00+00:00", "end": "2026-11-17T00:00:00+00:00"}]
+    for params in bad:
+        assert client.get("/api/admin/stats", headers=token, params=params).status_code == 400

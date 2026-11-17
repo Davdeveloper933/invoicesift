@@ -16,6 +16,7 @@ import secrets
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -398,11 +399,31 @@ def check_admin(token: str | None, request: Request) -> None:
 
 @app.get("/api/admin/stats")
 def admin_stats(request: Request, x_admin_token: str | None = Header(None),
-                x_visitor_id: str | None = Header(None)) -> dict[str, Any]:
+                x_visitor_id: str | None = Header(None), start: str = "", end: str = "",
+                tz: int = 0) -> dict[str, Any]:
+    """``start``/``end``: ISO times with offset, e.g. 2026-11-17T00:00:00+03:00 (empty = all time).
+    ``tz``: the admin's UTC offset in minutes, for "today" and the per-day chart."""
     check_admin(x_admin_token, request)
     # The browser that opened the admin page is the owner's: leave it out of the stats.
     store.add_owner(clean(x_visitor_id or "", 64))
-    return store.stats()
+    if not -14 * 60 <= tz <= 14 * 60:
+        raise HTTPException(400, "Bad time zone.")
+    start_at, end_at = parse_moment(start), parse_moment(end)
+    if start_at and end_at and end_at <= start_at:
+        raise HTTPException(400, "The period ends before it starts.")
+    return store.stats(start_at, end_at, tz)
+
+
+def parse_moment(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(value[:40])
+    except ValueError:
+        raise HTTPException(400, "Bad date.") from None
+    if moment.tzinfo is None:
+        raise HTTPException(400, "Date needs a time zone offset.")
+    return moment
 
 
 def csv_cell(value: Any) -> str:

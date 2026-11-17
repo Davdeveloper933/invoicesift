@@ -154,70 +154,99 @@ class Store:
         return max(by_ip, by_visitor)
 
     # --- admin stats (owner's own browsers excluded) ----------------------------
-    def _visitors_with(self, conn, *names: str) -> int:
-        query = select(func.count(func.distinct(events.c.visitor_id))).where(events.c.event.in_(names), NOT_OWNER_EV)
-        return conn.execute(query).scalar_one()
+    def stats(self, start: datetime | None = None, end: datetime | None = None,
+              tz_minutes: int = 0) -> dict[str, Any]:
+        """Stats for the period [start, end) - all time when both are None.
 
-    def stats(self) -> dict[str, Any]:
-        today = now().replace(hour=0, minute=0, second=0, microsecond=0)
+        ``tz_minutes`` is the admin's UTC offset (e.g. 180 for UTC+3): it decides where
+        "today" and the days of the 14-day chart begin and end, and how times are shown.
+        """
+        tz = timezone(timedelta(minutes=tz_minutes))
+
+        def period(column):
+            # SQLite stores times as naive UTC text, so always compare in UTC.
+            conds = []
+            if start is not None:
+                conds.append(column >= start.astimezone(timezone.utc))
+            if end is not None:
+                conds.append(column < end.astimezone(timezone.utc))
+            return conds
+
+        ev, fb, su = period(events.c.created_at), period(feedback.c.created_at), period(signups.c.created_at)
+
+        def visitors_with(conn, *names: str) -> int:
+            query = select(func.count(func.distinct(events.c.visitor_id))).where(
+                events.c.event.in_(names), NOT_OWNER_EV, *ev)
+            return conn.execute(query).scalar_one()
+
+        local_now = now().astimezone(tz)
+        today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        since = today - timedelta(days=13)
         with self.engine.connect() as conn:
             funnel = [
-                ("Visited the site", self._visitors_with(conn, "visit")),
-                ("Tried the demo", self._visitors_with(conn, "demo_sample", "demo_upload")),
-                ("Uploaded own invoices", self._visitors_with(conn, "demo_upload")),
-                ("Used all free invoices", self._visitors_with(conn, "free_limit_reached")),
-                ("Downloaded the CSV", self._visitors_with(conn, "csv_download")),
-                ("Saw pricing", self._visitors_with(conn, "pricing_view")),
-                ("Clicked a plan", self._visitors_with(conn, "plan_click")),
+                ("Visited the site", visitors_with(conn, "visit")),
+                ("Tried the demo", visitors_with(conn, "demo_sample", "demo_upload")),
+                ("Uploaded own invoices", visitors_with(conn, "demo_upload")),
+                ("Used all free invoices", visitors_with(conn, "free_limit_reached")),
+                ("Downloaded the CSV", visitors_with(conn, "csv_download")),
+                ("Saw pricing", visitors_with(conn, "pricing_view")),
+                ("Clicked a plan", visitors_with(conn, "plan_click")),
                 ("Left feedback", conn.execute(
-                    select(func.count(func.distinct(feedback.c.visitor_id))).where(NOT_OWNER_FB)
+                    select(func.count(func.distinct(feedback.c.visitor_id))).where(NOT_OWNER_FB, *fb)
                 ).scalar_one()),
                 ("Joined the waitlist", conn.execute(
-                    select(func.count(func.distinct(func.lower(signups.c.email)))).where(NOT_OWNER_SU)
+                    select(func.count(func.distinct(func.lower(signups.c.email)))).where(NOT_OWNER_SU, *su)
                 ).scalar_one()),
             ]
             processed = select(func.count()).select_from(events).where(
                 events.c.event == "invoice_processed", NOT_OWNER_EV)
-            invoices_total = conn.execute(processed).scalar_one()
-            invoices_today = conn.execute(processed.where(events.c.created_at >= today)).scalar_one()
+            invoices_period = conn.execute(processed.where(*ev)).scalar_one()
+            invoices_today = conn.execute(
+                processed.where(events.c.created_at >= today.astimezone(timezone.utc))).scalar_one()
 
             plan_clicks = dict(conn.execute(
                 select(events.c.detail, func.count(func.distinct(events.c.visitor_id)))
-                .where(events.c.event == "plan_click", NOT_OWNER_EV).group_by(events.c.detail)
+                .where(events.c.event == "plan_click", NOT_OWNER_EV, *ev).group_by(events.c.detail)
             ).all())
             plan_signups = dict(conn.execute(
-                select(signups.c.plan, func.count()).where(NOT_OWNER_SU).group_by(signups.c.plan)
+                select(signups.c.plan, func.count()).where(NOT_OWNER_SU, *su).group_by(signups.c.plan)
             ).all())
             ratings = dict(conn.execute(
-                select(feedback.c.rating, func.count()).where(NOT_OWNER_FB).group_by(feedback.c.rating)
+                select(feedback.c.rating, func.count()).where(NOT_OWNER_FB, *fb).group_by(feedback.c.rating)
             ).all())
 
             sources_visits = dict(conn.execute(
                 select(events.c.source, func.count(func.distinct(events.c.visitor_id)))
-                .where(events.c.event == "visit", NOT_OWNER_EV).group_by(events.c.source)
+                .where(events.c.event == "visit", NOT_OWNER_EV, *ev).group_by(events.c.source)
             ).all())
             sources_signups = dict(conn.execute(
-                select(signups.c.source, func.count()).where(NOT_OWNER_SU).group_by(signups.c.source)
+                select(signups.c.source, func.count()).where(NOT_OWNER_SU, *su).group_by(signups.c.source)
             ).all())
 
-            since = today - timedelta(days=13)
+            # The 14-day chart always shows the last two weeks, whatever period is picked.
             recent_visits = conn.execute(
-                select(events.c.created_at, events.c.visitor_id)
-                .where(events.c.event == "visit", events.c.created_at >= since, NOT_OWNER_EV)
+                select(events.c.created_at, events.c.visitor_id).where(
+                    events.c.event == "visit", events.c.created_at >= since.astimezone(timezone.utc),
+                    NOT_OWNER_EV)
             ).all()
 
             signup_rows = [dict(r._mapping) for r in conn.execute(
-                select(signups).where(NOT_OWNER_SU).order_by(signups.c.created_at.desc())
+                select(signups).where(NOT_OWNER_SU, *su).order_by(signups.c.created_at.desc())
             )]
             feedback_rows = [dict(r._mapping) for r in conn.execute(
-                select(feedback).where(NOT_OWNER_FB).order_by(feedback.c.created_at.desc())
+                select(feedback).where(NOT_OWNER_FB, *fb).order_by(feedback.c.created_at.desc())
             )]
+
+        def local(moment: datetime) -> datetime:
+            if moment.tzinfo is None:  # SQLite gives back naive UTC
+                moment = moment.replace(tzinfo=timezone.utc)
+            return moment.astimezone(tz)
 
         daily: dict[str, set[str]] = {
             (since + timedelta(days=i)).strftime("%Y-%m-%d"): set() for i in range(14)
         }
         for created_at, visitor in recent_visits:
-            day = created_at.strftime("%Y-%m-%d")
+            day = local(created_at).strftime("%Y-%m-%d")
             if day in daily:
                 daily[day].add(visitor)
 
@@ -227,11 +256,11 @@ class Store:
             key=lambda row: -row["visitors"],
         )
         for row in signup_rows + feedback_rows:
-            row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M")
+            row["created_at"] = local(row["created_at"]).strftime("%Y-%m-%d %H:%M")
             row.pop("visitor_id", None)
         return {
             "funnel": [{"step": step, "visitors": count} for step, count in funnel],
-            "invoices_processed": {"total": invoices_total, "today": invoices_today},
+            "invoices_processed": {"total": invoices_period, "today": invoices_today},
             "plans": [
                 {"plan": p, "clicks": plan_clicks.get(p, 0), "signups": plan_signups.get(p, 0)}
                 for p in sorted(set(plan_clicks) | set(plan_signups))

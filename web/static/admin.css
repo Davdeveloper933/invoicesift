@@ -18,3 +18,12 @@ td.wrap-text { white-space: normal; min-width: 220px; }
 @media (max-width: 760px) { .two { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 1fr 1fr 70px; } }
 .dash-title { font-size: 1.8rem; }
 #login .btn { margin-top: 12px; }
+.period { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.chip { font: inherit; font-size: .9rem; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.chip:hover { border-color: var(--brand); color: var(--brand); }
+.chip.active { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+input.chip { padding: 5px 12px; }
+.day { cursor: pointer; }
+.day:hover i { opacity: .75; }
+.day.selected i { background: var(--ink); }
+.day.selected { color: var(--ink); font-weight: 600; }
