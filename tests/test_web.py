@@ -320,3 +320,16 @@ def test_admin_stats_rejects_bad_period(client):
            {"start": "2026-11-18T00:00:00+00:00", "end": "2026-11-17T00:00:00+00:00"}]
     for params in bad:
         assert client.get("/api/admin/stats", headers=token, params=params).status_code == 400
+
+
+def test_pages_link_assets_with_content_version(client):
+    import re
+    for path, script in (("/", "app.js"), ("/admin", "admin.js")):
+        html = client.get(path).text
+        match = re.search(rf'src="/static/{script}\?v=([0-9a-f]{{10}})"', html)
+        assert match, f"{path} should link a versioned {script}"
+        asset = client.get(f"/static/{script}?v={match.group(1)}")
+        assert asset.status_code == 200 and "immutable" in asset.headers["cache-control"]
+        assert 'href="/static/styles.css?v=' in html
+    # Unversioned static files must be re-validated, so an update is never missed.
+    assert client.get("/static/admin.js").headers["cache-control"] == "no-cache"

@@ -22,7 +22,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -137,14 +137,42 @@ def clean(value: str, limit: int) -> str:
 
 # --- pages ---------------------------------------------------------------------
 
+ASSET_LINK = re.compile(r'((?:src|href)=")(/static/([^"?#]+))"')
+_page_cache: dict[str, tuple[tuple[float, ...], str]] = {}
+
+
+def asset_version(rel: str) -> str:
+    path = (STATIC_DIR / rel).resolve()
+    if STATIC_DIR.resolve() not in path.parents or not path.is_file():
+        return ""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+
+
+def page(name: str) -> HTMLResponse:
+    """An HTML page whose /static/ links carry the file's content hash (?v=...).
+
+    After an update the browser sees new URLs and fetches the new JS/CSS at once,
+    instead of pairing a new page with an old cached script (dead buttons)."""
+    html_path = STATIC_DIR / name
+    stamp = tuple(f.stat().st_mtime for f in sorted(STATIC_DIR.rglob("*")) if f.is_file())
+    cached = _page_cache.get(name)
+    if cached is None or cached[0] != stamp:
+        def versioned(m: re.Match) -> str:
+            version = asset_version(m.group(3))
+            return f'{m.group(1)}{m.group(2)}?v={version}"' if version else m.group(0)
+        cached = (stamp, ASSET_LINK.sub(versioned, html_path.read_text(encoding="utf-8")))
+        _page_cache[name] = cached
+    return HTMLResponse(cached[1])
+
+
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+def index() -> HTMLResponse:
+    return page("index.html")
 
 
 @app.get("/admin", include_in_schema=False)
-def admin_page() -> FileResponse:
-    return FileResponse(STATIC_DIR / "admin.html")
+def admin_page() -> HTMLResponse:
+    return page("admin.html")
 
 
 @app.get("/samples/{name}", include_in_schema=False)

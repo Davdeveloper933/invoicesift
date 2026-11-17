@@ -53,6 +53,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault(name, value)
         if request.url.path.startswith(("/api/", "/admin")):
             response.headers["Cache-Control"] = "no-store"
+        if request.url.path.startswith("/static/"):
+            # Versioned links (?v=<content hash>, see web.app.page) never change, so the
+            # browser may keep them; anything else must be re-checked with the server.
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable" if request.query_params.get("v") else "no-cache")
         if request.url.path.startswith("/admin"):
             response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
