@@ -33,7 +33,7 @@ from extract_invoices import make_extractor  # noqa: E402  (needs .env loaded fi
 from invoice_extractor.normalize import FIELDS  # noqa: E402
 from invoice_extractor.pipeline import InvoiceResult, flag_duplicates, process_file  # noqa: E402
 
-from .db import Store, make_engine  # noqa: E402
+from .db import OWNER_IP_PREFIX, Store, make_engine  # noqa: E402
 from .security import MaxBodySizeMiddleware, RateLimiter, SecurityHeadersMiddleware  # noqa: E402
 
 log = logging.getLogger("web")
@@ -193,7 +193,9 @@ def health() -> PlainTextResponse:
 def is_owner(visitor_id: str) -> bool:
     # visitor_id is a random id kept in the browser; it is marked as the owner's only
     # after a successful login to /admin from that browser (see admin_stats).
-    return bool(visitor_id) and visitor_id != "anonymous" and store.is_owner(visitor_id)
+    if not visitor_id or visitor_id == "anonymous" or visitor_id.startswith(OWNER_IP_PREFIX):
+        return False
+    return store.is_owner(visitor_id)
 
 
 def free_left(ip_hash: str, visitor_id: str) -> int:
@@ -369,12 +371,46 @@ class SignupIn(BaseModel):
     website: str = Field("", max_length=200)
 
 
+# Link-preview bots, security scanners that "click" links, uptime monitors and scripts.
+# Some of them run JavaScript, so without this filter they show up as visitors.
+BOT_UA = re.compile(
+    r"bot|crawl|spider|slurp|preview|headless|lighthouse|pagespeed|python|curl|wget|httpclient"
+    r"|java/|go-http|okhttp|axios|node-fetch|scrapy|facebookexternalhit|embedly|whatsapp"
+    r"|skypeuripreview|monitor|uptime|pingdom|phantomjs|selenium|puppeteer|playwright|scanner",
+    re.IGNORECASE)
+
+
+def is_bot(user_agent: str) -> bool:
+    return not user_agent.strip() or bool(BOT_UA.search(user_agent))
+
+
+def device_of(ua: str) -> str:
+    """A short, human-readable device label, e.g. "LinkedIn app · iPhone"."""
+    apps = [("LinkedInApp", "LinkedIn app"), ("FBAN", "Facebook app"), ("FBAV", "Facebook app"),
+            ("Instagram", "Instagram app"), ("Telegram", "Telegram")]
+    browsers = [("Edg/", "Edge"), ("OPR/", "Opera"), ("YaBrowser", "Yandex"), ("SamsungBrowser", "Samsung"),
+                ("Firefox/", "Firefox"), ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")]
+    systems = [("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"), ("Windows", "Windows"),
+               ("Macintosh", "Mac"), ("CrOS", "ChromeOS"), ("Linux", "Linux")]
+    pick = lambda pairs: next((name for key, name in pairs if key in ua), "")  # noqa: E731
+    browser = pick(apps) or pick(browsers) or "Other"
+    system = pick(systems)
+    return f"{browser} · {system}" if system else browser
+
+
 @app.post("/api/event")
 def track(body: EventIn, request: Request) -> dict[str, bool]:
     rate_limit("event", request)
     if body.event not in ALLOWED_EVENTS:
         raise HTTPException(400, "unknown event")
-    store.add_event(clean(body.visitor_id, 64), body.event, clean(body.detail, 200),
+    user_agent = request.headers.get("user-agent", "")
+    if is_bot(user_agent):
+        return {"ok": True}  # pretend success, store nothing
+    detail = clean(body.detail, 200)
+    if body.event == "visit":
+        # "page | device" - shown in the admin's list of visits.
+        detail = f"{detail[:120]} | {device_of(user_agent)}"
+    store.add_event(clean(body.visitor_id, 64), body.event, detail,
                     clean(body.source, 100), client_ip_hash(request))
     return {"ok": True}
 
@@ -434,6 +470,9 @@ def admin_stats(request: Request, x_admin_token: str | None = Header(None),
     check_admin(x_admin_token, request)
     # The browser that opened the admin page is the owner's: leave it out of the stats.
     store.add_owner(clean(x_visitor_id or "", 64))
+    # ...and its network too: visits from the same IP in other browsers (the LinkedIn
+    # app, a phone on the same Wi-Fi, a private window) are yours as well.
+    store.add_owner(OWNER_IP_PREFIX + client_ip_hash(request))
     if not -14 * 60 <= tz <= 14 * 60:
         raise HTTPException(400, "Bad time zone.")
     start_at, end_at = parse_moment(start), parse_moment(end)

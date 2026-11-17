@@ -20,7 +20,9 @@ from sqlalchemy import (
     Table,
     Text,
     create_engine,
+    and_,
     func,
+    literal,
     select,
 )
 from sqlalchemy.engine import Engine
@@ -73,8 +75,13 @@ owners = Table(
     Column("visitor_id", String(64), primary_key=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
+# Rows "ip:<ip hash>" mark the owner's networks: events from those IPs are excluded too.
+OWNER_IP_PREFIX = "ip:"
 _owner_ids = select(owners.c.visitor_id)
-NOT_OWNER_EV = events.c.visitor_id.not_in(_owner_ids)
+NOT_OWNER_EV = and_(
+    events.c.visitor_id.not_in(_owner_ids),
+    literal(OWNER_IP_PREFIX).concat(events.c.ip_hash).not_in(_owner_ids),
+)
 NOT_OWNER_FB = feedback.c.visitor_id.not_in(_owner_ids)
 NOT_OWNER_SU = signups.c.visitor_id.not_in(_owner_ids)
 
@@ -233,6 +240,11 @@ class Store:
             signup_rows = [dict(r._mapping) for r in conn.execute(
                 select(signups).where(NOT_OWNER_SU, *su).order_by(signups.c.created_at.desc())
             )]
+            visit_rows = conn.execute(
+                select(events.c.created_at, events.c.visitor_id, events.c.source, events.c.detail)
+                .where(events.c.event == "visit", NOT_OWNER_EV, *ev)
+                .order_by(events.c.created_at.desc()).limit(100)
+            ).all()
             feedback_rows = [dict(r._mapping) for r in conn.execute(
                 select(feedback).where(NOT_OWNER_FB, *fb).order_by(feedback.c.created_at.desc())
             )]
@@ -258,7 +270,19 @@ class Store:
         for row in signup_rows + feedback_rows:
             row["created_at"] = local(row["created_at"]).strftime("%Y-%m-%d %H:%M")
             row.pop("visitor_id", None)
+        visits = []
+        for created_at, visitor, source, detail in visit_rows:
+            page_, _, device = (detail or "").partition(" | ")
+            visits.append({
+                "created_at": local(created_at).strftime("%Y-%m-%d %H:%M"),
+                # A short tag, enough to see repeat visits of one browser; not the full id.
+                "visitor": visitor[:6],
+                "source": source or "(direct)",
+                "device": device or "—",
+                "page": page_,
+            })
         return {
+            "visits": visits,
             "funnel": [{"step": step, "visitors": count} for step, count in funnel],
             "invoices_processed": {"total": invoices_period, "today": invoices_today},
             "plans": [

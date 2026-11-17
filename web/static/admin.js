@@ -121,6 +121,7 @@
       $("#days").appendChild(col);
     });
 
+    table($("#visits"), [["created_at", "When"], ["visitor", "Browser tag"], ["source", "Source"], ["device", "Device"], ["page", "Page"]], s.visits || [], "No visits in this period");
     table($("#plans"), [["plan", "Plan"], ["clicks", "Clicked", "num"], ["signups", "Reserved", "num"]], s.plans, "No plan clicks yet");
     table($("#sources"), [["source", "Source"], ["visitors", "Visitors", "num"], ["signups", "Sign-ups", "num"]], s.sources, "No visits yet");
     table($("#signups"), [["created_at", "When"], ["email", "Email"], ["plan", "Plan"], ["monthly_volume", "Invoices/mo"], ["integrations", "Integrations"], ["comment", "Comment", "wrap-text"], ["source", "Source"]], s.signups, "No sign-ups yet");

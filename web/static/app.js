@@ -30,7 +30,8 @@
       keepalive: true,
     }).catch(() => {});
   }
-  track("visit", location.pathname + location.search);
+  // Automated browsers (scanners, test robots) say so in navigator.webdriver: not a visitor.
+  if (!navigator.webdriver) track("visit", location.pathname + location.search);
 
   // ---------- elements ----------
   const $ = (sel) => document.querySelector(sel);

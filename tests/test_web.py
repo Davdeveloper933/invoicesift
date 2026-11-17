@@ -32,7 +32,19 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(web_app, "ADMIN_TOKEN", "test-admin-token-123456")
     fresh = {name: RateLimiter(lim.limit, lim.window) for name, lim in web_app.limits.items()}
     monkeypatch.setattr(web_app, "limits", fresh)
-    return TestClient(web_app.app)
+    test_client = TestClient(web_app.app, headers={"CF-Connecting-IP": VISITOR_IP})
+    test_client.event_hooks = {"request": [admin_ip], "response": []}
+    return test_client
+
+
+# Visitors and the admin come from different networks, like in real life: the admin's
+# IP is marked as the owner's, so visits from it are left out of the stats.
+VISITOR_IP, ADMIN_IP = "198.51.100.1", "203.0.113.9"
+
+
+def admin_ip(request):
+    if "x-admin-token" in request.headers:
+        request.headers["CF-Connecting-IP"] = ADMIN_IP
 
 
 def upload(client, n, visitor="v1"):
@@ -333,3 +345,34 @@ def test_pages_link_assets_with_content_version(client):
         assert 'href="/static/styles.css?v=' in html
     # Unversioned static files must be re-validated, so an update is never missed.
     assert client.get("/static/admin.js").headers["cache-control"] == "no-cache"
+
+
+def test_bots_and_scanners_are_not_counted(client):
+    for ua in ("LinkedInBot/1.0 (compatible; Mozilla/5.0)", "Mozilla/5.0 HeadlessChrome/120.0", "python-requests/2.31", ""):
+        assert client.post("/api/event", json={"visitor_id": "b", "event": "visit"},
+                           headers={"User-Agent": ua}).status_code == 200
+    stats = client.get("/api/admin/stats", headers=ADMIN).json()
+    assert stats["funnel"][0]["visitors"] == 0 and stats["visits"] == []
+
+
+def test_visit_list_shows_device_and_source(client):
+    ua = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+          "(KHTML, like Gecko) Mobile/15E148 [LinkedInApp]/9.29")
+    client.post("/api/event", json={"visitor_id": "abcdef123", "event": "visit", "detail": "/", "source": "linkedin"},
+                headers={"User-Agent": ua})
+    visit = client.get("/api/admin/stats", headers=ADMIN).json()["visits"][0]
+    assert visit["device"] == "LinkedIn app · iPhone"
+    assert visit["source"] == "linkedin" and visit["visitor"] == "abcdef" and visit["page"] == "/"
+
+
+def test_owner_network_left_out_of_stats(client):
+    # The owner opens the LinkedIn link in another browser on the same Wi-Fi as the admin page.
+    client.post("/api/event", json={"visitor_id": "linkedin-app", "event": "visit"},
+                headers={"CF-Connecting-IP": ADMIN_IP})
+    client.post("/api/event", json={"visitor_id": "stranger", "event": "visit"})
+    stats = client.get("/api/admin/stats", headers=ADMIN).json()
+    assert stats["funnel"][0]["visitors"] == 1
+    assert [v["visitor"] for v in stats["visits"]] == ["strang"]
+    # The owner-network marker cannot be used as a browser id to skip the demo limit.
+    owner_row = next(r for r in web_app.store.engine.connect().exec_driver_sql("select visitor_id from owners"))
+    assert owner_row[0].startswith("ip:") and not web_app.is_owner(owner_row[0])
