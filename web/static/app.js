@@ -30,8 +30,19 @@
       keepalive: true,
     }).catch(() => {});
   }
-  // Automated browsers (scanners, test robots) say so in navigator.webdriver: not a visitor.
-  if (!navigator.webdriver) track("visit", location.pathname + location.search);
+  // A visit counts only once a person does something: moves the mouse, scrolls, touches
+  // the screen or presses a key. Link scanners (e.g. the safety check behind a LinkedIn
+  // link) load the page like a normal browser but never interact, so they are not counted.
+  // Automated browsers also say so in navigator.webdriver.
+  const HUMAN_EVENTS = ["pointermove", "pointerdown", "wheel", "scroll", "touchstart", "keydown"];
+  function countVisit(e) {
+    if (!e.isTrusted) return; // events faked by a script
+    HUMAN_EVENTS.forEach((name) => window.removeEventListener(name, countVisit, true));
+    track("visit", location.pathname + location.search);
+  }
+  if (!navigator.webdriver) {
+    HUMAN_EVENTS.forEach((name) => window.addEventListener(name, countVisit, { capture: true, passive: true }));
+  }
 
   // ---------- elements ----------
   const $ = (sel) => document.querySelector(sel);
