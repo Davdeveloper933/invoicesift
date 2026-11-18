@@ -58,6 +58,10 @@
     }
   }
 
+  // Your own visits and invoices count by default; this hides them from every number.
+  const MINE_KEY = "is_admin_hide_mine";
+  let hideMine = (() => { try { return localStorage.getItem(MINE_KEY) === "1"; } catch { return false; } })();
+
   function setPeriod(p) {
     period = p;
     try { sessionStorage.setItem(PERIOD_KEY, JSON.stringify(p)); } catch {}
@@ -66,7 +70,7 @@
 
   function statsUrl() {
     const [start, end] = periodRange(period);
-    const q = new URLSearchParams({ tz: String(-new Date().getTimezoneOffset()) });
+    const q = new URLSearchParams({ tz: String(-new Date().getTimezoneOffset()), mine: hideMine ? "0" : "1" });
     if (start) { q.set("start", iso(start)); q.set("end", iso(end)); }
     return "/api/admin/stats?" + q;
   }
@@ -78,6 +82,9 @@
     input.max = ymd(new Date());
     input.value = period.key === "day" ? period.day : "";
     input.classList.toggle("active", period.key === "day");
+    const mine = $("#hide-mine");
+    mine.classList.toggle("active", hideMine);
+    mine.setAttribute("aria-pressed", String(hideMine));
     document.querySelectorAll(".period-label").forEach((el) => { el.textContent = label; });
   }
 
@@ -142,6 +149,11 @@
   }
 
   document.querySelectorAll("[data-period]").forEach((b) => b.addEventListener("click", () => setPeriod({ key: b.dataset.period })));
+  $("#hide-mine").addEventListener("click", () => {
+    hideMine = !hideMine;
+    try { localStorage.setItem(MINE_KEY, hideMine ? "1" : "0"); } catch {}
+    load();
+  });
   $("#period-day").addEventListener("change", (e) => { if (e.target.value) setPeriod({ key: "day", day: e.target.value }); });
 
   $("#login").addEventListener("submit", (e) => { e.preventDefault(); setToken($("#token").value.trim()); load(); });

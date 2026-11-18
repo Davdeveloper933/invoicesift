@@ -23,6 +23,7 @@ td.wrap-text { white-space: normal; min-width: 220px; }
 .chip:hover { border-color: var(--brand); color: var(--brand); }
 .chip.active { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
 input.chip { padding: 5px 12px; }
+.chip-toggle { margin-left: auto; }
 .day { cursor: pointer; }
 .day:hover i { opacity: .75; }
 .day.selected i { background: var(--ink); }

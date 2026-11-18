@@ -29,6 +29,7 @@
         <button type="button" class="chip" data-period="30d">30 days</button>
         <button type="button" class="chip" data-period="all">All time</button>
         <input type="date" class="chip" id="period-day" aria-label="Pick a day">
+        <button type="button" class="chip chip-toggle" id="hide-mine" aria-pressed="false">Hide my activity</button>
       </div>
       <p class="muted"><b class="period-label"></b> · <span id="updated"></span></p>
       <div class="grid" id="tiles"></div>
@@ -37,7 +38,7 @@
       <div class="card"><h2>Visitors per day <small class="muted">last 14 days · click a day to open it</small></h2><div class="days" id="days"></div></div>
 
       <div class="card"><h2>Visits <small class="muted">newest first · <span class="period-label"></span></small></h2>
-        <p class="muted card-note">Same tag = the same browser came back. Bots, link scanners and your own networks (any IP you opened this page from) are not counted.</p>
+        <p class="muted card-note">Same tag = the same browser came back. Bots and link scanners are not counted. Your own visits are tagged “you” (any browser or network you opened this page from); “Hide my activity” leaves them out of every number.</p>
         <div class="table-scroll"><table id="visits"></table></div></div>
 
       <div class="two">

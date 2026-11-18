@@ -34,7 +34,7 @@ from extract_invoices import make_extractor  # noqa: E402  (needs .env loaded fi
 from invoice_extractor.normalize import FIELDS  # noqa: E402
 from invoice_extractor.pipeline import InvoiceResult, flag_duplicates, process_file  # noqa: E402
 
-from .db import OWNER_IP_PREFIX, Store, make_engine  # noqa: E402
+from .db import OWNER_INVOICE_EVENT, OWNER_IP_PREFIX, Store, make_engine  # noqa: E402
 from .security import MaxBodySizeMiddleware, RateLimiter, SecurityHeadersMiddleware  # noqa: E402
 
 log = logging.getLogger("web")
@@ -55,9 +55,6 @@ MAX_PAGES = int(os.getenv("DEMO_MAX_PAGES", "3"))
 # The site owner (any browser that has logged into /admin) has no free-invoice limit,
 # only this cap on files per upload.
 OWNER_MAX_FILES = int(os.getenv("DEMO_OWNER_MAX_FILES", "20"))
-# Invoices of the owner are logged under their own event, so they never count towards
-# visitors' free limits, the global daily cap or the stats.
-OWNER_INVOICE_EVENT = "owner_invoice_processed"
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 # Salt for hashing IPs (we never store raw IP addresses).
 IP_SALT = os.getenv("IP_SALT") or ADMIN_TOKEN or "local-dev-salt"
@@ -491,11 +488,13 @@ def check_admin(token: str | None, request: Request) -> None:
 @app.get("/api/admin/stats")
 def admin_stats(request: Request, x_admin_token: str | None = Header(None),
                 x_visitor_id: str | None = Header(None), start: str = "", end: str = "",
-                tz: int = 0) -> dict[str, Any]:
+                tz: int = 0, mine: int = 1) -> dict[str, Any]:
     """``start``/``end``: ISO times with offset, e.g. 2026-11-17T00:00:00+03:00 (empty = all time).
-    ``tz``: the admin's UTC offset in minutes, for "today" and the per-day chart."""
+    ``tz``: the admin's UTC offset in minutes, for "today" and the per-day chart.
+    ``mine``: 1 counts the owner's own activity too, 0 hides it."""
     check_admin(x_admin_token, request)
-    # The browser that opened the admin page is the owner's: leave it out of the stats.
+    # The browser that opened the admin page is the owner's (no free limit; its visits
+    # are tagged "you" and can be hidden)...
     store.add_owner(clean(x_visitor_id or "", 64))
     # ...and its network too: visits from the same IP in other browsers (the LinkedIn
     # app, a phone on the same Wi-Fi, a private window) are yours as well.
@@ -505,7 +504,7 @@ def admin_stats(request: Request, x_admin_token: str | None = Header(None),
     start_at, end_at = parse_moment(start), parse_moment(end)
     if start_at and end_at and end_at <= start_at:
         raise HTTPException(400, "The period ends before it starts.")
-    return store.stats(start_at, end_at, tz)
+    return store.stats(start_at, end_at, tz, include_owner=bool(mine))
 
 
 def parse_moment(value: str) -> datetime | None:

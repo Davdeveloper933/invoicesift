@@ -136,23 +136,30 @@ def test_feedback_signup_and_admin_stats(client):
     assert "me@example.com" in export.text
 
 
-def test_owner_browser_left_out_of_stats(client):
+def test_owner_activity_counted_and_hideable(client):
+    token = {"X-Admin-Token": "test-admin-token-123456"}
     for vid in ("owner", "guest"):
         client.post("/api/event", json={"visitor_id": vid, "event": "visit"})
         client.post("/api/feedback", json={"visitor_id": vid, "rating": "great", "comment": vid})
     upload(client, 1, visitor="owner")
-    before = client.get("/api/admin/stats", headers={"X-Admin-Token": "test-admin-token-123456"}).json()
-    assert before["funnel"][0]["visitors"] == 2
+    # Opening the admin page marks this browser as the owner's.
+    client.get("/api/admin/stats", headers={**token, "X-Visitor-Id": "owner"})
+    upload(client, 2, visitor="owner")  # admin mode: logged as owner invoices
 
-    # Opening the admin page from the owner's browser removes it, including its past visits.
-    stats = client.get("/api/admin/stats", headers={"X-Admin-Token": "test-admin-token-123456",
-                                                    "X-Visitor-Id": "owner"}).json()
+    # By default everything counts, the owner's own visits and invoices too.
+    stats = client.get("/api/admin/stats", headers=token).json()
+    assert stats["funnel"][0]["visitors"] == 2
+    assert stats["invoices_processed"]["total"] == 3
+    assert sorted(v["visitor"] for v in stats["visits"]) == ["guest", "you"]
+
+    # "Hide my activity" leaves the owner's browser out, including its past visits.
+    stats = client.get("/api/admin/stats", headers=token, params={"mine": 0}).json()
     assert stats["funnel"][0]["visitors"] == 1
     assert [f["comment"] for f in stats["feedback"]] == ["guest"]
     assert stats["invoices_processed"]["total"] == 0
     # A wrong token marks nobody as owner.
     client.get("/api/admin/stats", headers={"X-Admin-Token": "wrong", "X-Visitor-Id": "guest"})
-    stats = client.get("/api/admin/stats", headers={"X-Admin-Token": "test-admin-token-123456"}).json()
+    stats = client.get("/api/admin/stats", headers=token, params={"mine": 0}).json()
     assert stats["funnel"][0]["visitors"] == 1
 
 
@@ -370,9 +377,12 @@ def test_owner_network_left_out_of_stats(client):
     client.post("/api/event", json={"visitor_id": "linkedin-app", "event": "visit"},
                 headers={"CF-Connecting-IP": ADMIN_IP})
     client.post("/api/event", json={"visitor_id": "stranger", "event": "visit"})
-    stats = client.get("/api/admin/stats", headers=ADMIN).json()
+    stats = client.get("/api/admin/stats", headers=ADMIN, params={"mine": 0}).json()
     assert stats["funnel"][0]["visitors"] == 1
     assert [v["visitor"] for v in stats["visits"]] == ["strang"]
+    # Shown by default, tagged as yours.
+    stats = client.get("/api/admin/stats", headers=ADMIN).json()
+    assert sorted(v["visitor"] for v in stats["visits"]) == ["strang", "you"]
     # The owner-network marker cannot be used as a browser id to skip the demo limit.
     owner_row = next(r for r in web_app.store.engine.connect().exec_driver_sql("select visitor_id from owners"))
     assert owner_row[0].startswith("ip:") and not web_app.is_owner(owner_row[0])

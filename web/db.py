@@ -24,6 +24,7 @@ from sqlalchemy import (
     func,
     literal,
     select,
+    true,
 )
 from sqlalchemy.engine import Engine
 
@@ -75,15 +76,17 @@ owners = Table(
     Column("visitor_id", String(64), primary_key=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
+# Invoices the owner ran in admin mode (no free limit) are logged under this event.
+OWNER_INVOICE_EVENT = "owner_invoice_processed"
 # Rows "ip:<ip hash>" mark the owner's networks: events from those IPs are excluded too.
 OWNER_IP_PREFIX = "ip:"
 _owner_ids = select(owners.c.visitor_id)
-NOT_OWNER_EV = and_(
+_NOT_OWNER_EV = and_(
     events.c.visitor_id.not_in(_owner_ids),
     literal(OWNER_IP_PREFIX).concat(events.c.ip_hash).not_in(_owner_ids),
 )
-NOT_OWNER_FB = feedback.c.visitor_id.not_in(_owner_ids)
-NOT_OWNER_SU = signups.c.visitor_id.not_in(_owner_ids)
+_NOT_OWNER_FB = feedback.c.visitor_id.not_in(_owner_ids)
+_NOT_OWNER_SU = signups.c.visitor_id.not_in(_owner_ids)
 
 
 def now() -> datetime:
@@ -160,15 +163,21 @@ class Store:
             by_visitor = conn.execute(base.where(events.c.visitor_id == visitor_id)).scalar_one() if visitor_id else 0
         return max(by_ip, by_visitor)
 
-    # --- admin stats (owner's own browsers excluded) ----------------------------
+    # --- admin stats -------------------------------------------------------------
     def stats(self, start: datetime | None = None, end: datetime | None = None,
-              tz_minutes: int = 0) -> dict[str, Any]:
+              tz_minutes: int = 0, include_owner: bool = True) -> dict[str, Any]:
         """Stats for the period [start, end) - all time when both are None.
 
         ``tz_minutes`` is the admin's UTC offset (e.g. 180 for UTC+3): it decides where
         "today" and the days of the 14-day chart begin and end, and how times are shown.
         """
         tz = timezone(timedelta(minutes=tz_minutes))
+        # By default everything counts, the owner's own visits and invoices too;
+        # include_owner=False hides the owner's browsers and networks.
+        if include_owner:
+            NOT_OWNER_EV = NOT_OWNER_FB = NOT_OWNER_SU = true()
+        else:
+            NOT_OWNER_EV, NOT_OWNER_FB, NOT_OWNER_SU = _NOT_OWNER_EV, _NOT_OWNER_FB, _NOT_OWNER_SU
 
         def period(column):
             # SQLite stores times as naive UTC text, so always compare in UTC.
@@ -206,7 +215,7 @@ class Store:
                 ).scalar_one()),
             ]
             processed = select(func.count()).select_from(events).where(
-                events.c.event == "invoice_processed", NOT_OWNER_EV)
+                events.c.event.in_(("invoice_processed", OWNER_INVOICE_EVENT)), NOT_OWNER_EV)
             invoices_period = conn.execute(processed.where(*ev)).scalar_one()
             invoices_today = conn.execute(
                 processed.where(events.c.created_at >= today.astimezone(timezone.utc))).scalar_one()
@@ -241,7 +250,8 @@ class Store:
                 select(signups).where(NOT_OWNER_SU, *su).order_by(signups.c.created_at.desc())
             )]
             visit_rows = conn.execute(
-                select(events.c.created_at, events.c.visitor_id, events.c.source, events.c.detail)
+                select(events.c.created_at, events.c.visitor_id, events.c.source, events.c.detail,
+                       _NOT_OWNER_EV.label("stranger"))
                 .where(events.c.event == "visit", NOT_OWNER_EV, *ev)
                 .order_by(events.c.created_at.desc()).limit(100)
             ).all()
@@ -271,12 +281,12 @@ class Store:
             row["created_at"] = local(row["created_at"]).strftime("%Y-%m-%d %H:%M")
             row.pop("visitor_id", None)
         visits = []
-        for created_at, visitor, source, detail in visit_rows:
+        for created_at, visitor, source, detail, stranger in visit_rows:
             page_, _, device = (detail or "").partition(" | ")
             visits.append({
                 "created_at": local(created_at).strftime("%Y-%m-%d %H:%M"),
                 # A short tag, enough to see repeat visits of one browser; not the full id.
-                "visitor": visitor[:6],
+                "visitor": visitor[:6] if stranger else "you",
                 "source": source or "(direct)",
                 "device": device or "—",
                 "page": page_,
