@@ -17,12 +17,13 @@ import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -60,6 +61,10 @@ OWNER_INVOICE_EVENT = "owner_invoice_processed"
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 # Salt for hashing IPs (we never store raw IP addresses).
 IP_SALT = os.getenv("IP_SALT") or ADMIN_TOKEN or "local-dev-salt"
+# Public address of the site: used in robots.txt, sitemap.xml and the link-preview tags.
+SITE_URL = os.getenv("SITE_URL", "https://invoicesift.onrender.com").rstrip("/")
+# Optional: the code from Google Search Console's "HTML tag" verification method.
+GOOGLE_SITE_VERIFICATION = os.getenv("GOOGLE_SITE_VERIFICATION", "").strip()
 # Header set by the CDN in front of the site with the visitor's real IP (see client_ip).
 TRUSTED_IP_HEADER = os.getenv("TRUSTED_IP_HEADER", "cf-connecting-ip").strip().lower()
 
@@ -160,7 +165,12 @@ def page(name: str) -> HTMLResponse:
         def versioned(m: re.Match) -> str:
             version = asset_version(m.group(3))
             return f'{m.group(1)}{m.group(2)}?v={version}"' if version else m.group(0)
-        cached = (stamp, ASSET_LINK.sub(versioned, html_path.read_text(encoding="utf-8")))
+        html = ASSET_LINK.sub(versioned, html_path.read_text(encoding="utf-8"))
+        html = html.replace("%SITE_URL%", SITE_URL)
+        if GOOGLE_SITE_VERIFICATION:
+            tag = f'<meta name="google-site-verification" content="{escape(GOOGLE_SITE_VERIFICATION)}">'
+            html = html.replace("</head>", f"  {tag}\n</head>", 1)
+        cached = (stamp, html)
         _page_cache[name] = cached
     return HTMLResponse(cached[1])
 
@@ -181,6 +191,23 @@ def sample_pdf(name: str) -> FileResponse:
     if path.parent != SAMPLES_DIR or path.suffix.lower() != ".pdf" or not path.is_file():
         raise HTTPException(404)
     return FileResponse(path, media_type="application/pdf")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots() -> PlainTextResponse:
+    return PlainTextResponse(
+        "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\n\n"
+        f"Sitemap: {SITE_URL}/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap() -> Response:
+    updated = datetime.fromtimestamp((STATIC_DIR / "index.html").stat().st_mtime).strftime("%Y-%m-%d")
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+           f"  <url><loc>{SITE_URL}/</loc><lastmod>{updated}</lastmod></url>\n"
+           "</urlset>\n")
+    return Response(xml, media_type="application/xml")
 
 
 @app.get("/healthz", include_in_schema=False)

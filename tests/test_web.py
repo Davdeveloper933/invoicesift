@@ -376,3 +376,36 @@ def test_owner_network_left_out_of_stats(client):
     # The owner-network marker cannot be used as a browser id to skip the demo limit.
     owner_row = next(r for r in web_app.store.engine.connect().exec_driver_sql("select visitor_id from owners"))
     assert owner_row[0].startswith("ip:") and not web_app.is_owner(owner_row[0])
+
+
+def test_robots_and_sitemap(client):
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200 and "Disallow: /admin" in robots.text and "Disallow: /api/" in robots.text
+    assert f"Sitemap: {web_app.SITE_URL}/sitemap.xml" in robots.text
+    sitemap = client.get("/sitemap.xml")
+    assert sitemap.headers["content-type"].startswith("application/xml")
+    assert f"<loc>{web_app.SITE_URL}/</loc>" in sitemap.text
+
+
+def test_link_preview_and_structured_data(client):
+    import json
+    import re
+    html = client.get("/").text
+    assert "%SITE_URL%" not in html
+    image = re.search(r'<meta property="og:image" content="([^"]+)"', html).group(1)
+    assert image == f"{web_app.SITE_URL}/static/img/og.jpg"
+    assert client.get("/static/img/og.jpg").status_code == 200
+    assert f'<link rel="canonical" href="{web_app.SITE_URL}/">' in html
+    # The only inline <script> is the JSON-LD data block (not executed, so the CSP still holds).
+    blocks = re.findall(r"<script(?![^>]*\bsrc=)([^>]*)>(.*?)</script>", html, re.S)
+    assert [attrs.strip() for attrs, _ in blocks] == ['type="application/ld+json"']
+    data = json.loads(blocks[0][1])
+    assert data["@type"] == "SoftwareApplication" and data["url"] == f"{web_app.SITE_URL}/"
+
+
+def test_google_verification_tag(client, monkeypatch):
+    assert "google-site-verification" not in client.get("/").text
+    monkeypatch.setattr(web_app, "GOOGLE_SITE_VERIFICATION", 'abc123"><script>')
+    monkeypatch.setattr(web_app, "_page_cache", {})
+    html = client.get("/").text
+    assert '<meta name="google-site-verification" content="abc123&quot;&gt;&lt;script&gt;">' in html
